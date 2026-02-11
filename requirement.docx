@@ -1,3 +1,6 @@
 streamlit==1.47.1
 openai-whisper
+torch
+torchaudio
 pandas
+numba
