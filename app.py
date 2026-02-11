@@ -5,6 +5,8 @@ from datetime import datetime
 import os
 import requests
 import time
+import io
+from pydub import AudioSegment
 
 st.title("Classroom Speaking Proficiency Test")
 st.write("Please complete all parts. Speak clearly and naturally.")
@@ -18,11 +20,24 @@ def transcribe_audio_assemblyai(audio_bytes):
     if not API_KEY:
         return "Error: API key not configured. Please add ASSEMBLYAI_API_KEY to Streamlit secrets."
     
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp:
-        tmp.write(audio_bytes.getvalue())
-        tmp_path = tmp.name
-    
     try:
+        # Convert audio to proper WAV format using pydub
+        audio = AudioSegment.from_file(io.BytesIO(audio_bytes.getvalue()))
+        
+        # Export as WAV with proper settings
+        wav_io = io.BytesIO()
+        audio.export(
+            wav_io,
+            format="wav",
+            parameters=["-ar", "16000", "-ac", "1"]  # 16kHz, mono
+        )
+        wav_io.seek(0)
+        
+        # Save to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp:
+            tmp.write(wav_io.read())
+            tmp_path = tmp.name
+        
         headers = {"authorization": API_KEY}
         
         # Step 1: Upload the audio file
@@ -40,12 +55,12 @@ def transcribe_audio_assemblyai(audio_bytes):
         if not upload_url:
             return "Error: Failed to get upload URL"
         
-        # Step 2: Request transcription with SPEECH_MODELS (plural, as list)
+        # Step 2: Request transcription
         transcript_response = requests.post(
             "https://api.assemblyai.com/v2/transcript",
             json={
                 "audio_url": upload_url,
-                "speech_models": ["universal-2"]  # Fixed: plural and as a list!
+                "speech_models": ["universal-2"]
             },
             headers=headers
         )
@@ -74,7 +89,8 @@ def transcribe_audio_assemblyai(audio_bytes):
             status = result.get("status")
             
             if status == "completed":
-                return result.get("text", "No text returned")
+                text = result.get("text", "")
+                return text if text else "No speech detected"
             elif status == "error":
                 error_msg = result.get("error", "Unknown error")
                 return f"Transcription failed: {error_msg}"
@@ -105,12 +121,12 @@ for i, sentence in enumerate(sentences):
             transcript = transcribe_audio_assemblyai(audio)
         st.write("**Transcript:**", transcript)
         
-        if not transcript.startswith("Error"):
+        if not transcript.startswith("Error") and transcript != "No speech detected":
             score = len(set(transcript.lower().split()) & set(sentence.lower().split())) / len(sentence.split()) * 5
             part1_scores.append(score)
             st.write("**Accuracy Score:**", round(score, 2), "/ 5")
         else:
-            st.error("Transcription failed. Please try again.")
+            st.warning("⚠️ Could not transcribe. Please record again and speak clearly.")
 
 st.header("Part 2: Respond to Student Questions")
 prompts = [
@@ -127,13 +143,13 @@ for i, prompt in enumerate(prompts):
             transcript = transcribe_audio_assemblyai(audio)
         st.write("**Transcript:**", transcript)
         
-        if not transcript.startswith("Error"):
+        if not transcript.startswith("Error") and transcript != "No speech detected":
             word_count = len(transcript.split())
             fluency_score = min(word_count/20, 5)
             part2_scores.append(fluency_score)
             st.write("**Fluency Score:**", round(fluency_score, 2), "/ 5")
         else:
-            st.error("Transcription failed. Please try again.")
+            st.warning("⚠️ Could not transcribe. Please record again and speak clearly.")
 
 st.header("Part 3: Free Explanation")
 st.write("Explain how to write a good paragraph.")
@@ -144,12 +160,12 @@ if audio3:
         transcript = transcribe_audio_assemblyai(audio3)
     st.write("**Transcript:**", transcript)
     
-    if not transcript.startswith("Error"):
+    if not transcript.startswith("Error") and transcript != "No speech detected":
         word_count = len(transcript.split())
         part3_score = min(word_count/40, 5)
         st.write("**Fluency Score:**", round(part3_score, 2), "/ 5")
     else:
-        st.error("Transcription failed. Please try again.")
+        st.warning("⚠️ Could not transcribe. Please record again and speak clearly.")
 
 if st.button("Submit Test", type="primary"):
     if not name or not institution:
