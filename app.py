@@ -40,12 +40,12 @@ def transcribe_audio_assemblyai(audio_bytes):
         if not upload_url:
             return "Error: Failed to get upload URL"
         
-        # Step 2: Request transcription WITH SPEECH MODEL
+        # Step 2: Request transcription with SPEECH_MODELS (plural, as list)
         transcript_response = requests.post(
             "https://api.assemblyai.com/v2/transcript",
             json={
                 "audio_url": upload_url,
-                "speech_model": "universal-2"  # This is the fix!
+                "speech_models": ["universal-2"]  # Fixed: plural and as a list!
             },
             headers=headers
         )
