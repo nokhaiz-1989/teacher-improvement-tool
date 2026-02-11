@@ -18,9 +18,9 @@ def load_whisper_model():
 
 model = load_whisper_model()
 
-def transcribe_audio(audio_file):
+def transcribe_audio(audio_bytes):
     with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp:
-        tmp.write(audio_file.read())
+        tmp.write(audio_bytes.getvalue())
         tmp_path = tmp.name
     try:
         result = model.transcribe(tmp_path)
@@ -40,18 +40,16 @@ sentences = [
 
 part1_scores = []
 for i, sentence in enumerate(sentences):
-    st.write(f"Sentence {i+1}: {sentence}")
-    audio = st.file_uploader(f"Upload audio for Sentence {i+1}", 
-                             type=['wav', 'mp3', 'm4a'], 
-                             key=f"p1_{i}")
+    st.write(f"**Sentence {i+1}:** {sentence}")
+    audio = st.audio_input(f"Record Sentence {i+1}", key=f"p1_{i}")
     if audio:
         transcript = transcribe_audio(audio)
-        st.write("Transcript:", transcript)
+        st.write("**Transcript:**", transcript)
         # simple accuracy score
         score = len(set(transcript.lower().split()) & 
                     set(sentence.lower().split())) / len(sentence.split()) * 5
         part1_scores.append(score)
-        st.write("Accuracy Score:", round(score, 2))
+        st.write("**Accuracy Score:**", round(score, 2))
 
 # --------------------
 # PART 2
@@ -64,33 +62,29 @@ prompts = [
 
 part2_scores = []
 for i, prompt in enumerate(prompts):
-    st.write(f"Student: {prompt}")
-    audio = st.file_uploader("Upload your response", 
-                             type=['wav', 'mp3', 'm4a'], 
-                             key=f"p2_{i}")
+    st.write(f"**Student:** {prompt}")
+    audio = st.audio_input("Record your response", key=f"p2_{i}")
     if audio:
         transcript = transcribe_audio(audio)
-        st.write("Transcript:", transcript)
+        st.write("**Transcript:**", transcript)
         word_count = len(transcript.split())
         fluency_score = min(word_count/20, 5)
         part2_scores.append(fluency_score)
-        st.write("Fluency Score:", round(fluency_score, 2))
+        st.write("**Fluency Score:**", round(fluency_score, 2))
 
 # --------------------
 # PART 3
 # --------------------
 st.header("Part 3: Free Explanation")
 st.write("Explain how to write a good paragraph.")
-audio3 = st.file_uploader("Upload your explanation", 
-                          type=['wav', 'mp3', 'm4a'], 
-                          key="p3")
+audio3 = st.audio_input("Record your explanation", key="p3")
 part3_score = None
 if audio3:
     transcript = transcribe_audio(audio3)
-    st.write("Transcript:", transcript)
+    st.write("**Transcript:**", transcript)
     word_count = len(transcript.split())
     part3_score = min(word_count/40, 5)
-    st.write("Fluency Score:", round(part3_score, 2))
+    st.write("**Fluency Score:**", round(part3_score, 2))
 
 # --------------------
 # SAVE RESULTS
@@ -112,4 +106,4 @@ if st.button("Submit Test"):
     # Check if file exists to write header
     file_exists = os.path.isfile("results.csv")
     df.to_csv("results.csv", mode="a", header=not file_exists, index=False)
-    st.success("Submission recorded successfully.")
+    st.success(f"✅ Submission recorded successfully! Total Score: {round(total_score, 2)}")
