@@ -40,10 +40,13 @@ def transcribe_audio_assemblyai(audio_bytes):
         if not upload_url:
             return "Error: Failed to get upload URL"
         
-        # Step 2: Request transcription
+        # Step 2: Request transcription WITH SPEECH MODEL
         transcript_response = requests.post(
             "https://api.assemblyai.com/v2/transcript",
-            json={"audio_url": upload_url},
+            json={
+                "audio_url": upload_url,
+                "speech_model": "universal-2"  # This is the fix!
+            },
             headers=headers
         )
         
@@ -57,7 +60,7 @@ def transcribe_audio_assemblyai(audio_bytes):
             return f"Error: No transcript ID received. Response: {transcript_data}"
         
         # Step 3: Poll for completion
-        max_attempts = 60  # Wait up to 60 seconds
+        max_attempts = 60
         for attempt in range(max_attempts):
             status_response = requests.get(
                 f"https://api.assemblyai.com/v2/transcript/{transcript_id}",
@@ -102,7 +105,6 @@ for i, sentence in enumerate(sentences):
             transcript = transcribe_audio_assemblyai(audio)
         st.write("**Transcript:**", transcript)
         
-        # Only calculate score if transcription was successful
         if not transcript.startswith("Error"):
             score = len(set(transcript.lower().split()) & set(sentence.lower().split())) / len(sentence.split()) * 5
             part1_scores.append(score)
