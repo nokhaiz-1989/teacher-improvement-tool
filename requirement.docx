@@ -2,3 +2,4 @@ streamlit
 SpeechRecognition
 pydub
 pandas
+PyAudio
