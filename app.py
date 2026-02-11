@@ -138,3 +138,33 @@ st.write("Explain how to write a good paragraph.")
 audio3 = st.audio_input("Record your explanation", key="p3")
 part3_score = None
 if audio3:
+    with st.spinner("Transcribing..."):
+        transcript = transcribe_audio_assemblyai(audio3)
+    st.write("**Transcript:**", transcript)
+    
+    if not transcript.startswith("Error"):
+        word_count = len(transcript.split())
+        part3_score = min(word_count/40, 5)
+        st.write("**Fluency Score:**", round(part3_score, 2), "/ 5")
+    else:
+        st.error("Transcription failed. Please try again.")
+
+if st.button("Submit Test", type="primary"):
+    if not name or not institution:
+        st.error("⚠️ Please enter your name and institution before submitting.")
+    else:
+        total_score = sum(part1_scores) + sum(part2_scores) + (part3_score if part3_score else 0)
+        data = {
+            "Name": name,
+            "Institution": institution,
+            "Part1_Score": round(sum(part1_scores), 2),
+            "Part2_Score": round(sum(part2_scores), 2),
+            "Part3_Score": round(part3_score if part3_score else 0, 2),
+            "Total_Score": round(total_score, 2),
+            "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        df = pd.DataFrame([data])
+        file_exists = os.path.isfile("results.csv")
+        df.to_csv("results.csv", mode="a", header=not file_exists, index=False)
+        st.success(f"✅ Submission recorded successfully! Total Score: {round(total_score, 2)}")
+        st.balloons()
