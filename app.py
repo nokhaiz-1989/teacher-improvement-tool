@@ -10,7 +10,6 @@ st.write("Please complete all parts. Speak clearly and naturally.")
 name = st.text_input("Full Name")
 institution = st.text_input("Institution")
 
-# Lazy load the model
 @st.cache_resource
 def load_model():
     from transformers import pipeline
@@ -28,9 +27,6 @@ def transcribe_audio(audio_bytes):
     finally:
         os.unlink(tmp_path)
 
-# --------------------
-# PART 1
-# --------------------
 st.header("Part 1: Repeat the Sentence")
 sentences = [
     "Please open your books to page ten.",
@@ -46,15 +42,10 @@ for i, sentence in enumerate(sentences):
         with st.spinner("Transcribing..."):
             transcript = transcribe_audio(audio)
         st.write("**Transcript:**", transcript)
-        # simple accuracy score
-        score = len(set(transcript.lower().split()) & 
-                    set(sentence.lower().split())) / len(sentence.split()) * 5
+        score = len(set(transcript.lower().split()) & set(sentence.lower().split())) / len(sentence.split()) * 5
         part1_scores.append(score)
         st.write("**Accuracy Score:**", round(score, 2), "/ 5")
 
-# --------------------
-# PART 2
-# --------------------
 st.header("Part 2: Respond to Student Questions")
 prompts = [
     "When will attendance be uploaded?",
@@ -74,9 +65,6 @@ for i, prompt in enumerate(prompts):
         part2_scores.append(fluency_score)
         st.write("**Fluency Score:**", round(fluency_score, 2), "/ 5")
 
-# --------------------
-# PART 3
-# --------------------
 st.header("Part 3: Free Explanation")
 st.write("Explain how to write a good paragraph.")
 audio3 = st.audio_input("Record your explanation", key="p3")
@@ -89,50 +77,19 @@ if audio3:
     part3_score = min(word_count/40, 5)
     st.write("**Fluency Score:**", round(part3_score, 2), "/ 5")
 
-# --------------------
-# SAVE RESULTS
-# --------------------
 if st.button("Submit Test", type="primary"):
     if not name or not institution:
         st.error("⚠️ Please enter your name and institution before submitting.")
     else:
-        total_score = (
-            sum(part1_scores) +
-            sum(part2_scores) +
-            (part3_score if part3_score else 0)
-        )
-        
+        total_score = sum(part1_scores) + sum(part2_scores) + (part3_score if part3_score else 0)
         data = {
             "Name": name,
             "Institution": institution,
             "Total_Score": round(total_score, 2),
             "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
-        
         df = pd.DataFrame([data])
-        
-        # Check if file exists to write header
         file_exists = os.path.isfile("results.csv")
         df.to_csv("results.csv", mode="a", header=not file_exists, index=False)
-        
         st.success(f"✅ Submission recorded successfully! Total Score: {round(total_score, 2)}")
         st.balloons()
-```
-
----
-
-## **New requirements.txt**
-```
-streamlit
-transformers
-torch
-torchaudio
-pandas
-accelerate
-```
-
----
-
-## **packages.txt** (same as before)
-```
-ffmpeg
