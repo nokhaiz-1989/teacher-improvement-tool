@@ -3,8 +3,6 @@ import tempfile
 import pandas as pd
 from datetime import datetime
 import os
-import speech_recognition as sr
-from pydub import AudioSegment
 
 st.title("Classroom Speaking Proficiency Test")
 st.write("Please complete all parts. Speak clearly and naturally.")
@@ -12,34 +10,23 @@ st.write("Please complete all parts. Speak clearly and naturally.")
 name = st.text_input("Full Name")
 institution = st.text_input("Institution")
 
+# Lazy load the model
+@st.cache_resource
+def load_model():
+    from transformers import pipeline
+    return pipeline("automatic-speech-recognition", model="openai/whisper-base")
+
 def transcribe_audio(audio_bytes):
-    # Save audio to temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp:
         tmp.write(audio_bytes.getvalue())
         tmp_path = tmp.name
     
     try:
-        # Convert to wav if needed using pydub
-        audio = AudioSegment.from_file(tmp_path)
-        wav_path = tmp_path.replace('.wav', '_converted.wav')
-        audio.export(wav_path, format='wav')
-        
-        # Use speech recognition
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(wav_path) as source:
-            audio_data = recognizer.record(source)
-            try:
-                text = recognizer.recognize_google(audio_data)
-                return text
-            except sr.UnknownValueError:
-                return "Could not understand audio"
-            except sr.RequestError:
-                return "Error with speech recognition service"
+        transcriber = load_model()
+        result = transcriber(tmp_path)
+        return result["text"]
     finally:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-        if os.path.exists(wav_path):
-            os.unlink(wav_path)
+        os.unlink(tmp_path)
 
 # --------------------
 # PART 1
@@ -130,3 +117,22 @@ if st.button("Submit Test", type="primary"):
         
         st.success(f"✅ Submission recorded successfully! Total Score: {round(total_score, 2)}")
         st.balloons()
+```
+
+---
+
+## **New requirements.txt**
+```
+streamlit
+transformers
+torch
+torchaudio
+pandas
+accelerate
+```
+
+---
+
+## **packages.txt** (same as before)
+```
+ffmpeg
