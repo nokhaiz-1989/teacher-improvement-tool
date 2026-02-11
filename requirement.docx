@@ -1,6 +1,3 @@
-streamlit==1.47.1
-openai-whisper
-torch
-torchaudio
+streamlit
+git+https://github.com/openai/whisper.git
 pandas
-numba
