@@ -1,9 +1,10 @@
 import streamlit as st
 import tempfile
-import whisper
 import pandas as pd
 from datetime import datetime
 import os
+import speech_recognition as sr
+from pydub import AudioSegment
 
 st.title("Classroom Speaking Proficiency Test")
 st.write("Please complete all parts. Speak clearly and naturally.")
@@ -11,22 +12,34 @@ st.write("Please complete all parts. Speak clearly and naturally.")
 name = st.text_input("Full Name")
 institution = st.text_input("Institution")
 
-# Load model once
-@st.cache_resource
-def load_whisper_model():
-    return whisper.load_model("base")
-
-model = load_whisper_model()
-
 def transcribe_audio(audio_bytes):
+    # Save audio to temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp:
         tmp.write(audio_bytes.getvalue())
         tmp_path = tmp.name
+    
     try:
-        result = model.transcribe(tmp_path)
-        return result["text"]
+        # Convert to wav if needed using pydub
+        audio = AudioSegment.from_file(tmp_path)
+        wav_path = tmp_path.replace('.wav', '_converted.wav')
+        audio.export(wav_path, format='wav')
+        
+        # Use speech recognition
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(wav_path) as source:
+            audio_data = recognizer.record(source)
+            try:
+                text = recognizer.recognize_google(audio_data)
+                return text
+            except sr.UnknownValueError:
+                return "Could not understand audio"
+            except sr.RequestError:
+                return "Error with speech recognition service"
     finally:
-        os.unlink(tmp_path)
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        if os.path.exists(wav_path):
+            os.unlink(wav_path)
 
 # --------------------
 # PART 1
@@ -43,13 +56,14 @@ for i, sentence in enumerate(sentences):
     st.write(f"**Sentence {i+1}:** {sentence}")
     audio = st.audio_input(f"Record Sentence {i+1}", key=f"p1_{i}")
     if audio:
-        transcript = transcribe_audio(audio)
+        with st.spinner("Transcribing..."):
+            transcript = transcribe_audio(audio)
         st.write("**Transcript:**", transcript)
         # simple accuracy score
         score = len(set(transcript.lower().split()) & 
                     set(sentence.lower().split())) / len(sentence.split()) * 5
         part1_scores.append(score)
-        st.write("**Accuracy Score:**", round(score, 2))
+        st.write("**Accuracy Score:**", round(score, 2), "/ 5")
 
 # --------------------
 # PART 2
@@ -65,12 +79,13 @@ for i, prompt in enumerate(prompts):
     st.write(f"**Student:** {prompt}")
     audio = st.audio_input("Record your response", key=f"p2_{i}")
     if audio:
-        transcript = transcribe_audio(audio)
+        with st.spinner("Transcribing..."):
+            transcript = transcribe_audio(audio)
         st.write("**Transcript:**", transcript)
         word_count = len(transcript.split())
         fluency_score = min(word_count/20, 5)
         part2_scores.append(fluency_score)
-        st.write("**Fluency Score:**", round(fluency_score, 2))
+        st.write("**Fluency Score:**", round(fluency_score, 2), "/ 5")
 
 # --------------------
 # PART 3
@@ -80,30 +95,38 @@ st.write("Explain how to write a good paragraph.")
 audio3 = st.audio_input("Record your explanation", key="p3")
 part3_score = None
 if audio3:
-    transcript = transcribe_audio(audio3)
+    with st.spinner("Transcribing..."):
+        transcript = transcribe_audio(audio3)
     st.write("**Transcript:**", transcript)
     word_count = len(transcript.split())
     part3_score = min(word_count/40, 5)
-    st.write("**Fluency Score:**", round(part3_score, 2))
+    st.write("**Fluency Score:**", round(part3_score, 2), "/ 5")
 
 # --------------------
 # SAVE RESULTS
 # --------------------
-if st.button("Submit Test"):
-    total_score = (
-        sum(part1_scores) +
-        sum(part2_scores) +
-        (part3_score if part3_score else 0)
-    )
-    data = {
-        "Name": name,
-        "Institution": institution,
-        "Score": total_score,
-        "Date": datetime.now()
-    }
-    df = pd.DataFrame([data])
-    
-    # Check if file exists to write header
-    file_exists = os.path.isfile("results.csv")
-    df.to_csv("results.csv", mode="a", header=not file_exists, index=False)
-    st.success(f"✅ Submission recorded successfully! Total Score: {round(total_score, 2)}")
+if st.button("Submit Test", type="primary"):
+    if not name or not institution:
+        st.error("⚠️ Please enter your name and institution before submitting.")
+    else:
+        total_score = (
+            sum(part1_scores) +
+            sum(part2_scores) +
+            (part3_score if part3_score else 0)
+        )
+        
+        data = {
+            "Name": name,
+            "Institution": institution,
+            "Total_Score": round(total_score, 2),
+            "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        df = pd.DataFrame([data])
+        
+        # Check if file exists to write header
+        file_exists = os.path.isfile("results.csv")
+        df.to_csv("results.csv", mode="a", header=not file_exists, index=False)
+        
+        st.success(f"✅ Submission recorded successfully! Total Score: {round(total_score, 2)}")
+        st.balloons()
