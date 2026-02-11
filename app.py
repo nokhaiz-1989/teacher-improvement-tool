@@ -5,8 +5,6 @@ from datetime import datetime
 import os
 import requests
 import time
-import wave
-import io
 
 st.title("Classroom Speaking Proficiency Test")
 st.write("Please complete all parts. Speak clearly and naturally.")
@@ -28,7 +26,7 @@ def transcribe_audio_assemblyai(audio_bytes):
     try:
         headers = {"authorization": API_KEY}
         
-        # Step 1: Upload the audio file directly (AssemblyAI handles format conversion)
+        # Step 1: Upload the audio file directly
         with open(tmp_path, "rb") as f:
             upload_response = requests.post(
                 "https://api.assemblyai.com/v2/upload",
@@ -43,12 +41,12 @@ def transcribe_audio_assemblyai(audio_bytes):
         if not upload_url:
             return "Error: Failed to get upload URL"
         
-        # Step 2: Request transcription
+        # Step 2: Request transcription with CORRECT parameter
         transcript_response = requests.post(
             "https://api.assemblyai.com/v2/transcript",
             json={
                 "audio_url": upload_url,
-                "speech_model": "nano"  # Using nano model (faster, still accurate)
+                "speech_models": ["nano"]  # FIXED: plural + array
             },
             headers=headers
         )
@@ -63,7 +61,7 @@ def transcribe_audio_assemblyai(audio_bytes):
             return f"Error: No transcript ID received. Response: {transcript_data}"
         
         # Step 3: Poll for completion
-        max_attempts = 90  # Increased timeout
+        max_attempts = 90
         for attempt in range(max_attempts):
             status_response = requests.get(
                 f"https://api.assemblyai.com/v2/transcript/{transcript_id}",
