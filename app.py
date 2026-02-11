@@ -5,8 +5,8 @@ from datetime import datetime
 import os
 import requests
 import time
+import wave
 import io
-from pydub import AudioSegment
 
 st.title("Classroom Speaking Proficiency Test")
 st.write("Please complete all parts. Speak clearly and naturally.")
@@ -20,32 +20,20 @@ def transcribe_audio_assemblyai(audio_bytes):
     if not API_KEY:
         return "Error: API key not configured. Please add ASSEMBLYAI_API_KEY to Streamlit secrets."
     
+    # Save the raw audio data directly
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.webm', mode='wb') as tmp:
+        tmp.write(audio_bytes.getvalue())
+        tmp_path = tmp.name
+    
     try:
-        # Convert audio to proper WAV format using pydub
-        audio = AudioSegment.from_file(io.BytesIO(audio_bytes.getvalue()))
-        
-        # Export as WAV with proper settings
-        wav_io = io.BytesIO()
-        audio.export(
-            wav_io,
-            format="wav",
-            parameters=["-ar", "16000", "-ac", "1"]  # 16kHz, mono
-        )
-        wav_io.seek(0)
-        
-        # Save to temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp:
-            tmp.write(wav_io.read())
-            tmp_path = tmp.name
-        
         headers = {"authorization": API_KEY}
         
-        # Step 1: Upload the audio file
+        # Step 1: Upload the audio file directly (AssemblyAI handles format conversion)
         with open(tmp_path, "rb") as f:
             upload_response = requests.post(
                 "https://api.assemblyai.com/v2/upload",
                 headers=headers,
-                files={"file": f}
+                data=f
             )
         
         if upload_response.status_code != 200:
@@ -60,7 +48,7 @@ def transcribe_audio_assemblyai(audio_bytes):
             "https://api.assemblyai.com/v2/transcript",
             json={
                 "audio_url": upload_url,
-                "speech_models": ["universal-2"]
+                "speech_model": "nano"  # Using nano model (faster, still accurate)
             },
             headers=headers
         )
@@ -75,7 +63,7 @@ def transcribe_audio_assemblyai(audio_bytes):
             return f"Error: No transcript ID received. Response: {transcript_data}"
         
         # Step 3: Poll for completion
-        max_attempts = 60
+        max_attempts = 90  # Increased timeout
         for attempt in range(max_attempts):
             status_response = requests.get(
                 f"https://api.assemblyai.com/v2/transcript/{transcript_id}",
@@ -95,7 +83,7 @@ def transcribe_audio_assemblyai(audio_bytes):
                 error_msg = result.get("error", "Unknown error")
                 return f"Transcription failed: {error_msg}"
             
-            time.sleep(1)
+            time.sleep(2)
         
         return "Error: Transcription timeout"
     
@@ -117,11 +105,11 @@ for i, sentence in enumerate(sentences):
     st.write(f"**Sentence {i+1}:** {sentence}")
     audio = st.audio_input(f"Record Sentence {i+1}", key=f"p1_{i}")
     if audio:
-        with st.spinner("Transcribing... (this may take 5-10 seconds)"):
+        with st.spinner("Transcribing... (this may take 10-15 seconds)"):
             transcript = transcribe_audio_assemblyai(audio)
         st.write("**Transcript:**", transcript)
         
-        if not transcript.startswith("Error") and transcript != "No speech detected":
+        if not transcript.startswith("Error") and not transcript.startswith("Transcription failed") and transcript != "No speech detected":
             score = len(set(transcript.lower().split()) & set(sentence.lower().split())) / len(sentence.split()) * 5
             part1_scores.append(score)
             st.write("**Accuracy Score:**", round(score, 2), "/ 5")
@@ -143,7 +131,7 @@ for i, prompt in enumerate(prompts):
             transcript = transcribe_audio_assemblyai(audio)
         st.write("**Transcript:**", transcript)
         
-        if not transcript.startswith("Error") and transcript != "No speech detected":
+        if not transcript.startswith("Error") and not transcript.startswith("Transcription failed") and transcript != "No speech detected":
             word_count = len(transcript.split())
             fluency_score = min(word_count/20, 5)
             part2_scores.append(fluency_score)
@@ -160,7 +148,7 @@ if audio3:
         transcript = transcribe_audio_assemblyai(audio3)
     st.write("**Transcript:**", transcript)
     
-    if not transcript.startswith("Error") and transcript != "No speech detected":
+    if not transcript.startswith("Error") and not transcript.startswith("Transcription failed") and transcript != "No speech detected":
         word_count = len(transcript.split())
         part3_score = min(word_count/40, 5)
         st.write("**Fluency Score:**", round(part3_score, 2), "/ 5")
