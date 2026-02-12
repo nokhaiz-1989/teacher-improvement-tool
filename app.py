@@ -304,37 +304,104 @@ def calculate_vocabulary_score(transcript):
     return round(final_score, 1)
 
 def calculate_grammar_score(transcript):
-    """Estimate grammar based on sentence structure"""
-    # Check for complete sentences
+    """
+    Comprehensive grammar assessment based on:
+    1. Sentence structure and completeness
+    2. Subject-verb agreement patterns
+    3. Proper use of articles, prepositions, and conjunctions
+    4. Sentence variety and complexity
+    """
+    if not transcript or len(transcript.strip()) < 5:
+        return 0.5
+    
+    words = transcript.split()
+    text_lower = transcript.lower()
+    
+    # Split into sentences
     sentences = re.split(r'[.!?]+', transcript)
-    complete_sentences = [s.strip() for s in sentences if s.strip()]
+    complete_sentences = [s.strip() for s in sentences if s.strip() and len(s.split()) >= 3]
     
-    # Check for capital letters at start
-    proper_capitalization = sum(1 for s in complete_sentences if s and s[0].isupper())
-    
-    # Base score
     if len(complete_sentences) == 0:
         return 1.0
     
-    score = 2.5
+    # === 1. SENTENCE STRUCTURE (2.0 points) ===
+    structure_score = 0.5  # Base
     
-    # Reward for complete sentences
-    if len(complete_sentences) >= 2:
-        score += 1.0
-    elif len(complete_sentences) >= 3:
-        score += 1.5
+    # Check for proper capitalization
+    proper_caps = sum(1 for s in complete_sentences if s and s[0].isupper())
+    if proper_caps > 0:
+        structure_score += 0.5
     
-    # Reward for proper capitalization
-    if proper_capitalization > 0:
-        score += 0.8
+    # Check for complete sentences (subject + verb patterns)
+    sentence_count = len(complete_sentences)
+    if sentence_count >= 2:
+        structure_score += 0.5
+    if sentence_count >= 3:
+        structure_score += 0.5
     
-    # Check for subject-verb patterns (basic grammar check)
-    common_verbs = ['is', 'are', 'was', 'were', 'have', 'has', 'will', 'can', 'should']
-    has_verbs = any(verb in transcript.lower().split() for verb in common_verbs)
-    if has_verbs:
-        score += 0.5
+    structure_score = min(structure_score, 2.0)
     
-    final_score = min(score, 5)
+    # === 2. VERB USAGE (1.5 points) ===
+    verb_score = 0
+    
+    # Common verbs (present, past, modal)
+    common_verbs = ['is', 'are', 'am', 'was', 'were', 'be', 'been', 'being',
+                   'have', 'has', 'had', 'do', 'does', 'did',
+                   'will', 'would', 'can', 'could', 'should', 'shall', 'may', 'might', 'must']
+    
+    verb_count = sum(1 for word in text_lower.split() if word in common_verbs)
+    
+    if verb_count >= 1:
+        verb_score += 0.5
+    if verb_count >= 2:
+        verb_score += 0.5
+    if verb_count >= 3:
+        verb_score += 0.5
+    
+    verb_score = min(verb_score, 1.5)
+    
+    # === 3. ARTICLES, PREPOSITIONS, CONJUNCTIONS (1.0 point) ===
+    function_score = 0
+    
+    articles = ['a', 'an', 'the']
+    prepositions = ['in', 'on', 'at', 'to', 'for', 'with', 'by', 'from', 'of', 'about']
+    conjunctions = ['and', 'but', 'or', 'so', 'because', 'if', 'when', 'while', 'although']
+    
+    has_articles = any(article in text_lower.split() for article in articles)
+    has_prepositions = any(prep in text_lower.split() for prep in prepositions)
+    has_conjunctions = any(conj in text_lower.split() for conj in conjunctions)
+    
+    if has_articles:
+        function_score += 0.3
+    if has_prepositions:
+        function_score += 0.4
+    if has_conjunctions:
+        function_score += 0.3
+    
+    function_score = min(function_score, 1.0)
+    
+    # === 4. SENTENCE VARIETY & COMPLEXITY (0.5 points) ===
+    variety_score = 0
+    
+    # Check sentence length variety
+    sentence_lengths = [len(s.split()) for s in complete_sentences]
+    if len(set(sentence_lengths)) > 1:
+        variety_score += 0.25
+    
+    # Check for complex sentences (with subordinate clauses)
+    subordinate_markers = ['because', 'since', 'although', 'while', 'if', 'when', 'that', 'which', 'who']
+    has_complexity = any(marker in text_lower.split() for marker in subordinate_markers)
+    if has_complexity:
+        variety_score += 0.25
+    
+    variety_score = min(variety_score, 0.5)
+    
+    # === TOTAL GRAMMAR SCORE ===
+    total_score = structure_score + verb_score + function_score + variety_score
+    
+    # Ensure variation between 0.5 and 5.0
+    final_score = max(0.5, min(5.0, total_score))
+    
     return round(final_score, 1)
 
 # Initialize session state for storing all recordings
@@ -351,7 +418,9 @@ st.write("*Rubric: Accuracy, Fluency, Intonation (each out of 5 stars)*")
 sentences = [
     "Please open your books to page ten.",
     "Work in pairs and discuss the question.",
-    "You have five minutes to complete this task."
+    "You have five minutes to complete this task.",
+    "Did everyone understand the instructions?",
+    "First, read the passage carefully, then answer the questions."
 ]
 
 for i, sentence in enumerate(sentences):
@@ -387,7 +456,8 @@ st.write("*Rubric: Vocabulary, Grammar, Fluency, Intonation (each out of 5 stars
 
 prompts = [
     "When will attendance be uploaded?",
-    "Can we submit the assignment late?"
+    "Can we submit the assignment late?",
+    "How do you differentiate between formative and summative assessment?"
 ]
 
 for i, prompt in enumerate(prompts):
