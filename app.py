@@ -111,60 +111,171 @@ def calculate_accuracy_score(transcript, reference):
     accuracy = (matches / len(reference_words)) * 5
     return min(accuracy, 5)
 
-def calculate_fluency_score(transcript):
-    """Calculate fluency based on word count, pace, and filler words"""
+def calculate_fluency_score(transcript, audio_duration=None):
+    """
+    Calculate fluency based on:
+    1. Speaking rate (words per minute)
+    2. Pronunciation quality (approximated via word completeness)
+    3. Verbal pauses (filler words and hesitations)
+    """
     words = transcript.split()
     word_count = len(words)
     
-    # Check for filler words
-    filler_words = ['um', 'uh', 'like', 'you know', 'so', 'actually', 'basically']
-    filler_count = sum(1 for word in words if word.lower() in filler_words)
+    if word_count == 0:
+        return 0.5
     
-    # Base score on word count (20+ words = good fluency)
-    if word_count >= 20:
-        base_score = 5.0
-    elif word_count >= 15:
-        base_score = 4.0
-    elif word_count >= 10:
-        base_score = 3.0
-    elif word_count >= 5:
-        base_score = 2.0
+    # === 1. SPEAKING RATE (Speed) ===
+    # Ideal rate: 120-160 words per minute
+    # For short responses, we estimate based on word density
+    if audio_duration and audio_duration > 0:
+        wpm = (word_count / audio_duration) * 60
     else:
-        base_score = 1.0
+        # Estimate: assume 2 seconds per word for short clips
+        estimated_duration = word_count * 2
+        wpm = (word_count / estimated_duration) * 60
     
-    # Penalize for excessive fillers
-    filler_penalty = min(filler_count * 0.3, 2.0)
+    # Score speaking rate
+    if 120 <= wpm <= 160:
+        rate_score = 2.0  # Optimal rate
+    elif 100 <= wpm < 120 or 160 < wpm <= 180:
+        rate_score = 1.5  # Acceptable
+    elif 80 <= wpm < 100 or 180 < wpm <= 200:
+        rate_score = 1.0  # Needs improvement
+    else:
+        rate_score = 0.5  # Too slow or too fast
     
-    return max(base_score - filler_penalty, 0.5)
+    # === 2. PRONUNCIATION QUALITY ===
+    # Approximate pronunciation by checking for complete, recognizable words
+    # Well-pronounced speech typically has words > 2 characters
+    well_formed_words = [w for w in words if len(w) > 2 and w.isalpha()]
+    pronunciation_ratio = len(well_formed_words) / word_count if word_count > 0 else 0
+    
+    if pronunciation_ratio >= 0.85:
+        pronunciation_score = 2.0
+    elif pronunciation_ratio >= 0.70:
+        pronunciation_score = 1.5
+    elif pronunciation_ratio >= 0.55:
+        pronunciation_score = 1.0
+    else:
+        pronunciation_score = 0.5
+    
+    # === 3. VERBAL PAUSES (Fillers and Hesitations) ===
+    filler_words = ['um', 'uh', 'like', 'you know', 'so', 'actually', 'basically', 
+                    'er', 'hmm', 'well', 'kind of', 'sort of']
+    
+    # Count filler occurrences
+    text_lower = transcript.lower()
+    filler_count = sum(text_lower.count(filler) for filler in filler_words)
+    
+    # Calculate filler ratio
+    filler_ratio = filler_count / word_count if word_count > 0 else 0
+    
+    # Score verbal pauses (lower filler ratio = better score)
+    if filler_ratio <= 0.05:  # Less than 5% fillers
+        pause_score = 1.0
+    elif filler_ratio <= 0.10:  # 5-10% fillers
+        pause_score = 0.75
+    elif filler_ratio <= 0.15:  # 10-15% fillers
+        pause_score = 0.5
+    else:  # More than 15% fillers
+        pause_score = 0.25
+    
+    # === TOTAL FLUENCY SCORE ===
+    total_score = rate_score + pronunciation_score + pause_score
+    
+    # Ensure score is between 0.5 and 5.0 with variation
+    final_score = max(0.5, min(5.0, total_score))
+    
+    return round(final_score, 1)
 
 def calculate_intonation_score(result):
-    """Estimate intonation based on punctuation and sentence variety"""
+    """
+    Calculate intonation based on:
+    1. Pitch variation (estimated from punctuation and sentence structure)
+    2. Stress patterns (emphasized words, varied sentence types)
+    3. Volume dynamics (approximated from text features)
+    
+    Excellent score (4.5-5.0): Uses excellent pitch, stress, and volume to convey meaning
+    """
     text = result.get("text", "")
     
-    # Count punctuation variety
+    if not text or len(text.strip()) < 10:
+        return 1.0
+    
+    # === 1. PITCH VARIATION ===
+    # Indicated by questions, exclamations, and varied sentence types
     has_question = "?" in text
     has_exclamation = "!" in text
-    has_comma = "," in text
+    has_period = "." in text
     
-    # Check for sentence length variety
+    question_count = text.count("?")
+    exclamation_count = text.count("!")
+    
+    # Score pitch variation
+    pitch_score = 1.0  # Base
+    if has_question:
+        pitch_score += 0.5
+    if has_exclamation:
+        pitch_score += 0.4
+    if question_count + exclamation_count >= 2:
+        pitch_score += 0.3  # Multiple varied sentences
+    
+    pitch_score = min(pitch_score, 2.0)
+    
+    # === 2. STRESS PATTERNS ===
+    # Estimated from sentence length variety, comma usage, and word emphasis
     sentences = re.split(r'[.!?]+', text)
     sentence_lengths = [len(s.split()) for s in sentences if s.strip()]
     
-    score = 2.5  # Base score
+    has_comma = "," in text
+    comma_count = text.count(",")
     
-    # Add points for variety
-    if has_question:
-        score += 0.7
-    if has_exclamation:
-        score += 0.5
+    # Check for length variation (indicates natural stress patterns)
+    if len(sentence_lengths) >= 2:
+        length_variance = len(set(sentence_lengths)) > 1
+    else:
+        length_variance = False
+    
+    stress_score = 1.0  # Base
+    
     if has_comma:
-        score += 0.3
+        stress_score += 0.3  # Pauses indicate stress
+    if comma_count >= 2:
+        stress_score += 0.2  # Multiple natural pauses
+    if length_variance:
+        stress_score += 0.5  # Varied sentence structure
     
-    # Add points for varied sentence length
-    if len(sentence_lengths) >= 2 and len(set(sentence_lengths)) > 1:
-        score += 1.0
+    # Check for capitalized words (potential emphasis)
+    words = text.split()
+    mid_sentence_caps = sum(1 for w in words[1:] if w and w[0].isupper() and w not in ['I'])
+    if mid_sentence_caps > 0:
+        stress_score += 0.3
     
-    return min(score, 5)
+    stress_score = min(stress_score, 2.0)
+    
+    # === 3. VOLUME DYNAMICS ===
+    # Approximated by exclamations, all caps words, and repetition
+    all_caps_words = sum(1 for w in words if w.isupper() and len(w) > 1)
+    has_repetition = len(words) != len(set(words))
+    
+    volume_score = 0.5  # Base
+    
+    if has_exclamation:
+        volume_score += 0.3  # Exclamations suggest volume change
+    if all_caps_words > 0:
+        volume_score += 0.2  # Emphasis
+    if has_repetition:
+        volume_score += 0.2  # Repetition for emphasis
+    
+    volume_score = min(volume_score, 1.0)
+    
+    # === TOTAL INTONATION SCORE ===
+    total_score = pitch_score + stress_score + volume_score
+    
+    # Ensure variation between 1.0 and 5.0
+    final_score = max(1.0, min(5.0, total_score))
+    
+    return round(final_score, 1)
 
 def calculate_vocabulary_score(transcript):
     """Calculate vocabulary richness"""
@@ -187,7 +298,10 @@ def calculate_vocabulary_score(transcript):
     # Bonus for advanced vocabulary
     bonus = advanced_ratio * 2
     
-    return min(base_score + bonus, 5)
+    final_score = min(base_score + bonus, 5)
+    
+    # Add variation
+    return round(final_score, 1)
 
 def calculate_grammar_score(transcript):
     """Estimate grammar based on sentence structure"""
@@ -206,13 +320,22 @@ def calculate_grammar_score(transcript):
     
     # Reward for complete sentences
     if len(complete_sentences) >= 2:
+        score += 1.0
+    elif len(complete_sentences) >= 3:
         score += 1.5
     
     # Reward for proper capitalization
     if proper_capitalization > 0:
-        score += 1.0
+        score += 0.8
     
-    return min(score, 5)
+    # Check for subject-verb patterns (basic grammar check)
+    common_verbs = ['is', 'are', 'was', 'were', 'have', 'has', 'will', 'can', 'should']
+    has_verbs = any(verb in transcript.lower().split() for verb in common_verbs)
+    if has_verbs:
+        score += 0.5
+    
+    final_score = min(score, 5)
+    return round(final_score, 1)
 
 # Initialize session state for storing all recordings
 if 'part1_recordings' not in st.session_state:
@@ -259,6 +382,7 @@ for i, sentence in enumerate(sentences):
                     }
 
 st.header("Part 2: Respond to Student Questions")
+st.write("*Respond in your own words in 1-2 sentences.*")
 st.write("*Rubric: Vocabulary, Grammar, Fluency, Intonation (each out of 5 stars)*")
 
 prompts = [
