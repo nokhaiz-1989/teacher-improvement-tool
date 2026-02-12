@@ -519,16 +519,185 @@ if st.button("Submit Test & View Results", type="primary"):
         percentage = (total_score / max_score * 100) if max_score > 0 else 0
         
         st.subheader("🎯 Final Summary")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total Score", f"{total_score:.1f}/{max_score:.0f}")
-        with col2:
-            st.metric("Percentage", f"{percentage:.1f}%")
-        with col3:
-            grade = "A" if percentage >= 90 else "B" if percentage >= 80 else "C" if percentage >= 70 else "D" if percentage >= 60 else "F"
-            st.metric("Grade", grade)
+        
+        # Display total score
+        st.metric("Total Score", f"{total_score:.1f}/{max_score:.0f}")
+        
+        # Calculate proficiency level
+        proficiency_percentage = percentage
+        
+        if proficiency_percentage >= 90:
+            proficiency_level = "Expert"
+            color = "#00C851"  # Green
+            emoji = "🌟"
+        elif proficiency_percentage >= 75:
+            proficiency_level = "Advanced"
+            color = "#33B5E5"  # Blue
+            emoji = "🎯"
+        elif proficiency_percentage >= 60:
+            proficiency_level = "Intermediate"
+            color = "#FFB733"  # Orange
+            emoji = "📈"
+        elif proficiency_percentage >= 45:
+            proficiency_level = "Developing"
+            color = "#FF8800"  # Dark Orange
+            emoji = "🌱"
+        else:
+            proficiency_level = "Emerging"
+            color = "#FF4444"  # Red
+            emoji = "🔰"
+        
+        # Display proficiency gauge
+        st.markdown(f"### {emoji} Speaking Proficiency Level: **{proficiency_level}**")
+        
+        # Create visual proficiency bar
+        st.markdown(f"""
+        <div style="background-color: #e0e0e0; border-radius: 10px; padding: 5px; margin: 10px 0;">
+            <div style="background-color: {color}; width: {proficiency_percentage}%; height: 30px; border-radius: 8px; 
+                        display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">
+                {proficiency_percentage:.1f}%
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Proficiency breakdown chart
+        st.markdown("#### 📊 Proficiency Breakdown")
+        
+        # Collect all component scores
+        component_scores = {
+            "Accuracy": [],
+            "Fluency": [],
+            "Intonation": [],
+            "Vocabulary": [],
+            "Grammar": []
+        }
+        
+        # Gather Part 1 scores
+        for rec in st.session_state.part1_recordings.values():
+            component_scores["Accuracy"].append(rec["accuracy"])
+            component_scores["Fluency"].append(rec["fluency"])
+            component_scores["Intonation"].append(rec["intonation"])
+        
+        # Gather Part 2 and Part 3 scores
+        for rec in st.session_state.part2_recordings.values():
+            component_scores["Vocabulary"].append(rec["vocabulary"])
+            component_scores["Grammar"].append(rec["grammar"])
+            component_scores["Fluency"].append(rec["fluency"])
+            component_scores["Intonation"].append(rec["intonation"])
+        
+        if st.session_state.part3_recording:
+            rec = st.session_state.part3_recording
+            component_scores["Vocabulary"].append(rec["vocabulary"])
+            component_scores["Grammar"].append(rec["grammar"])
+            component_scores["Fluency"].append(rec["fluency"])
+            component_scores["Intonation"].append(rec["intonation"])
+        
+        # Calculate averages
+        avg_scores = {}
+        for component, scores in component_scores.items():
+            if scores:
+                avg_scores[component] = sum(scores) / len(scores)
+        
+        # Display component bars
+        for component, avg in avg_scores.items():
+            percentage_comp = (avg / 5) * 100
+            
+            # Color coding based on score
+            if avg >= 4.5:
+                bar_color = "#00C851"
+            elif avg >= 3.5:
+                bar_color = "#33B5E5"
+            elif avg >= 2.5:
+                bar_color = "#FFB733"
+            else:
+                bar_color = "#FF8800"
+            
+            st.markdown(f"""
+            <div style="margin: 8px 0;">
+                <strong>{component}</strong> ({avg:.1f}/5)
+                <div style="background-color: #e0e0e0; border-radius: 5px; padding: 2px; margin-top: 3px;">
+                    <div style="background-color: {bar_color}; width: {percentage_comp}%; height: 20px; border-radius: 4px;"></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Encouraging remarks and areas for improvement
+        st.markdown("---")
+        st.markdown("### 💬 Feedback & Areas for Growth")
+        
+        # Identify strengths and areas for improvement
+        strengths = []
+        improvements = []
+        
+        for component, avg in avg_scores.items():
+            if avg >= 4.0:
+                strengths.append(component)
+            elif avg < 3.0:
+                improvements.append(component)
+        
+        # Encouraging message
+        if proficiency_percentage >= 90:
+            st.success("🌟 **Outstanding performance!** Your speaking proficiency demonstrates excellence across all areas. You're setting a wonderful example for effective classroom communication!")
+        elif proficiency_percentage >= 75:
+            st.info("🎯 **Great work!** You show strong speaking skills with clear communication. Keep refining your techniques to reach expert level!")
+        elif proficiency_percentage >= 60:
+            st.info("📈 **Good progress!** You're building solid speaking foundations. With continued practice, you'll see significant improvement!")
+        else:
+            st.warning("🌱 **Keep growing!** Every expert was once a beginner. Focus on the improvement areas below, and you'll see great progress with consistent practice!")
+        
+        # Strengths
+        if strengths:
+            st.markdown(f"**✅ Your Strengths:** {', '.join(strengths)}")
+            st.write("These areas showcase your natural abilities. Continue to leverage these skills in your teaching!")
+        
+        # Areas for improvement with specific tips
+        if improvements:
+            st.markdown(f"**🎯 Focus Areas for Growth:** {', '.join(improvements)}")
+            st.write("**Personalized Tips:**")
+            
+            for area in improvements:
+                if area == "Fluency":
+                    st.write("• **Fluency:** Practice speaking at a steady pace (120-160 words/minute). Record yourself and minimize filler words like 'um' and 'uh'.")
+                elif area == "Intonation":
+                    st.write("• **Intonation:** Vary your pitch and emphasize key words. Try reading stories aloud with emotion to practice natural stress patterns.")
+                elif area == "Pronunciation":
+                    st.write("• **Pronunciation:** Focus on clear articulation. Practice tongue twisters and record yourself to identify unclear sounds.")
+                elif area == "Vocabulary":
+                    st.write("• **Vocabulary:** Expand your word choice by reading diverse materials. Try using synonyms when explaining concepts.")
+                elif area == "Grammar":
+                    st.write("• **Grammar:** Review sentence structure basics. Speak in complete sentences and practice organizing thoughts before speaking.")
+                elif area == "Accuracy":
+                    st.write("• **Accuracy:** Listen carefully and repeat slowly. Focus on pronouncing each word clearly rather than rushing.")
+        
+        # General encouragement
+        st.markdown("---")
+        st.markdown("""
+        **Remember:** Effective teaching communication is a skill that improves with practice. Every small improvement 
+        makes a difference in how students understand and engage with your lessons. Keep practicing, stay confident, 
+        and celebrate your progress! 🎓✨
+        """)
+        
+        # Additional practice resources
+        with st.expander("📚 Practice Resources & Tips"):
+            st.markdown("""
+            **Daily Practice Ideas:**
+            - Record 2-minute daily voice notes explaining simple concepts
+            - Practice classroom instructions in front of a mirror
+            - Join speaking clubs or teacher peer practice groups
+            - Listen to educational podcasts and mimic their speaking patterns
+            - Use language learning apps focused on pronunciation
+            
+            **Before Teaching:**
+            - Warm up your voice with simple vocal exercises
+            - Practice saying new vocabulary words aloud
+            - Rehearse key instructions you'll give in class
+            - Breathe deeply to reduce anxiety and improve voice quality
+            """)
+
         
         # Save to CSV
+        proficiency_level = "Expert" if percentage >= 90 else "Advanced" if percentage >= 75 else "Intermediate" if percentage >= 60 else "Developing" if percentage >= 45 else "Emerging"
+        
         data = {
             "Name": name,
             "Institution": institution,
@@ -537,7 +706,7 @@ if st.button("Submit Test & View Results", type="primary"):
             "Part3_Score": round(part3_score, 2),
             "Total_Score": round(total_score, 2),
             "Percentage": round(percentage, 2),
-            "Grade": grade,
+            "Proficiency_Level": proficiency_level,
             "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
